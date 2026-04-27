@@ -6,6 +6,7 @@ from pathlib import Path
 
 from ggd_coach.logger import JsonlLogger
 from ggd_coach.models import CaptureResult, GameState, Observation
+from ggd_coach.samples import SampleStore
 from ggd_coach.state_detector import StateDetector
 from ggd_coach.suggestions import SuggestionEngine
 
@@ -58,3 +59,35 @@ def test_jsonl_logger_writes_observation_and_suggestion(tmp_path: Path) -> None:
     assert record["type"] == "coach_observation"
     assert record["observation"]["state"] == "unknown"
     assert record["suggestion"]["action"] == "pause"
+
+
+def test_sample_store_writes_state_index(tmp_path: Path) -> None:
+    class FakeCapture:
+        def save_frame(self, frame, path):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"fake")
+            return CaptureResult(
+                path=path,
+                width=frame.width,
+                height=frame.height,
+                created_at=frame.created_at,
+                source=frame.source,
+            )
+
+    from ggd_coach.models import Frame
+
+    frame = Frame(
+        width=2,
+        height=2,
+        created_at=datetime.now().astimezone(),
+        data=b"\x00" * 16,
+        source="test",
+    )
+    store = SampleStore(tmp_path / "samples", FakeCapture())
+
+    result = store.save(frame, GameState.MEETING)
+
+    assert result.path.exists()
+    assert result.path.parent.name == "meeting"
+    index = (tmp_path / "samples" / "samples.jsonl").read_text(encoding="utf-8")
+    assert '"state": "meeting"' in index

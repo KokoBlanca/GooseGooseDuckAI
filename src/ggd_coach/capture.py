@@ -61,8 +61,7 @@ class ScreenCapture:
             source=source,
         )
 
-    def capture(self) -> CaptureResult:
-        frame = self.grab()
+    def save_frame(self, frame: Frame, path: Path) -> CaptureResult:
         try:
             from PIL import Image
         except ImportError as exc:
@@ -70,15 +69,20 @@ class ScreenCapture:
                 "Saving debug captures needs Pillow. Install it with: python -m pip install pillow"
             ) from exc
 
-        created_at = datetime.now().astimezone()
-        filename = created_at.strftime("capture_%Y%m%d_%H%M%S.png")
-        path = self.output_dir / filename
+        path.parent.mkdir(parents=True, exist_ok=True)
         image = Image.frombytes("RGBA", (frame.width, frame.height), frame.data, "raw", "BGRA")
         image.save(path)
         return CaptureResult(
             path=path,
             width=frame.width,
             height=frame.height,
-            created_at=created_at,
+            created_at=frame.created_at,
             source=frame.source,
         )
+
+    def capture(self) -> CaptureResult:
+        frame = self.grab()
+        created_at = datetime.now().astimezone()
+        filename = created_at.strftime("capture_%Y%m%d_%H%M%S.png")
+        path = self.output_dir / filename
+        return self.save_frame(frame, path)

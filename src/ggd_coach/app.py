@@ -12,7 +12,8 @@ from tkinter import messagebox, ttk
 
 from .capture import ScreenCapture
 from .logger import JsonlLogger
-from .models import Frame, Observation
+from .models import Frame, GameState, Observation
+from .samples import SampleStore
 from .state_detector import StateDetector
 from .suggestions import SuggestionEngine
 
@@ -38,16 +39,19 @@ class CoachApp(tk.Tk):
         self.detector = StateDetector()
         self.suggestions = SuggestionEngine()
         self.logger = JsonlLogger(ROOT / "logs" / "coach_observations.jsonl")
+        self.samples = SampleStore(ROOT / "captures" / "samples", self.capture)
         self.preview_queue: queue.Queue[PreviewUpdate | Exception] = queue.Queue()
         self.preview_stop = threading.Event()
         self.preview_thread: threading.Thread | None = None
         self.preview_target_fps = float(os.environ.get("GGD_PREVIEW_FPS", "15"))
+        self.latest_frame: Frame | None = None
 
         self.state_var = tk.StringVar(value="unknown")
         self.confidence_var = tk.StringVar(value="0.00")
         self.preview_var = tk.StringVar(value="Stopped")
         self.source_var = tk.StringVar(value="No source yet")
         self.screenshot_var = tk.StringVar(value="No capture yet")
+        self.sample_state_var = tk.StringVar(value=GameState.UNKNOWN.value)
         self.notes_var = tk.StringVar(value="Click Capture Screen to create the first observation.")
         self.suggestion_var = tk.StringVar(value="Waiting for observation.")
         self.reason_var = tk.StringVar(value="")
@@ -109,6 +113,19 @@ class CoachApp(tk.Tk):
         self.stop_button = ttk.Button(controls, text="Stop Preview", command=self.stop_preview, state=tk.DISABLED)
         self.stop_button.pack(side=tk.LEFT, padx=(8, 0))
 
+        state_values = [state.value for state in GameState]
+        sample_state = ttk.Combobox(
+            controls,
+            textvariable=self.sample_state_var,
+            values=state_values,
+            width=18,
+            state="readonly",
+        )
+        sample_state.pack(side=tk.LEFT, padx=(16, 0))
+
+        sample_button = ttk.Button(controls, text="Save Sample", command=self.save_sample)
+        sample_button.pack(side=tk.LEFT, padx=(8, 0))
+
         quit_button = ttk.Button(controls, text="Quit", command=self.destroy)
         quit_button.pack(side=tk.RIGHT)
 
@@ -120,7 +137,10 @@ class CoachApp(tk.Tk):
 
     def capture_once(self) -> None:
         try:
-            capture = self.capture.capture()
+            frame = self.capture.grab()
+            self.latest_frame = frame
+            filename = frame.created_at.strftime("capture_%Y%m%d_%H%M%S.png")
+            capture = self.capture.save_frame(frame, ROOT / "captures" / filename)
         except RuntimeError as exc:
             messagebox.showerror("Capture failed", str(exc))
             return
@@ -143,6 +163,29 @@ class CoachApp(tk.Tk):
         self.notes_var.set(observation.notes)
         self.suggestion_var.set(suggestion.message)
         self.reason_var.set(f"Reason: {suggestion.reason}")
+
+    def save_sample(self) -> None:
+        if self.latest_frame is None:
+            try:
+                self.latest_frame = self.capture.grab()
+            except RuntimeError as exc:
+                messagebox.showerror("Sample failed", str(exc))
+                return
+
+        try:
+            state = GameState(self.sample_state_var.get())
+        except ValueError:
+            messagebox.showerror("Sample failed", "Choose a valid state label.")
+            return
+
+        try:
+            result = self.samples.save(self.latest_frame, state)
+        except RuntimeError as exc:
+            messagebox.showerror("Sample failed", str(exc))
+            return
+
+        self.screenshot_var.set(str(result.path))
+        self.notes_var.set(f"Saved labeled sample as {state.value}.")
 
     def start_preview(self) -> None:
         if self.preview_thread and self.preview_thread.is_alive():
@@ -211,6 +254,7 @@ class CoachApp(tk.Tk):
 
         if isinstance(update, PreviewUpdate):
             frame = update.frame
+            self.latest_frame = frame
             self.preview_var.set(f"{update.fps:.1f} FPS | {frame.width}x{frame.height}")
             self.source_var.set(frame.source)
             self.screenshot_var.set("Preview uses memory frames only")

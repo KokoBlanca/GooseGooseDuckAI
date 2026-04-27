@@ -14,6 +14,7 @@
 - [x] Replace slow debug-only screenshots with a faster in-memory capture path.
 - [x] Capture the Goose Goose Duck window instead of the full desktop when a matching window title is available.
 - [x] Add a continuous in-memory preview loop with FPS display.
+- [x] Add labeled frame sample collection for state detection work.
 - [ ] Detect high-level game states: lobby, free movement, meeting, voting, death/ghost, unknown.
 - [ ] Add OCR for visible task text and meeting/voting player names.
 - [ ] Add speech-to-text for friend-room discussion.

@@ -6,6 +6,7 @@ The first milestone is a read-only Coach prototype:
 
 - Capture the screen with a fast in-memory path.
 - Run a continuous preview loop without saving every frame.
+- Save labeled frame samples for state detection training/rules.
 - Detect a rough game state.
 - Save timestamped observations.
 - Show a conservative suggestion.
@@ -46,3 +47,5 @@ python scripts/benchmark_capture.py --window-title "Goose Goose Duck"
 ## Current Status
 
 Phase 1 is just beginning. The app can start, capture the desktop with a manual button, log observations, and return a placeholder state/suggestion. Realtime capture now uses `mss` in memory; the debug button saves a PNG only when clicked. The app also has a continuous preview loop for testing capture speed without writing frames to disk. The next step is to add real UI state detection.
+
+For state detection work, run preview during a private test session, choose a label from the dropdown, and click `Save Sample`. Samples are stored under `captures/samples/<state>/` and indexed in `captures/samples/samples.jsonl`.

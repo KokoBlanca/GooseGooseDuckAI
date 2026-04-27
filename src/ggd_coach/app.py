@@ -11,6 +11,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 from .capture import ScreenCapture
+from .game_memory import GameMemory
 from .logger import JsonlLogger
 from .models import Frame, GameState, Observation
 from .samples import SampleStore
@@ -41,6 +42,7 @@ class CoachApp(tk.Tk):
         self.capture = ScreenCapture(ROOT / "captures", window_title=window_title)
         self.detector = StateDetector()
         self.suggestions = SuggestionEngine()
+        self.memory = GameMemory()
         self.logger = JsonlLogger(ROOT / "logs" / "coach_observations.jsonl")
         self.samples = SampleStore(ROOT / "captures" / "samples", self.capture)
         self.preview_queue: queue.Queue[PreviewUpdate | Exception] = queue.Queue()
@@ -61,6 +63,11 @@ class CoachApp(tk.Tk):
         self.notes_var = tk.StringVar(value="Click Capture Screen to create the first observation.")
         self.suggestion_var = tk.StringVar(value="Waiting for observation.")
         self.reason_var = tk.StringVar(value="")
+        self.player_var = tk.StringVar(value="")
+        self.event_type_var = tk.StringVar(value="seen")
+        self.event_detail_var = tk.StringVar(value="")
+        self.memory_suggestion_var = tk.StringVar(value="记录事件后这里会给出局势建议。")
+        self.memory_reason_var = tk.StringVar(value="")
 
         self._build_ui()
         if self.autostart_preview:
@@ -115,8 +122,7 @@ class CoachApp(tk.Tk):
         self._add_row(status, "Notes", self.notes_var)
 
         suggestion = ttk.LabelFrame(side, text="Suggestion", padding=12)
-        suggestion.grid(row=1, column=0, sticky="nsew", pady=(12, 0))
-        side.rowconfigure(1, weight=1)
+        suggestion.grid(row=1, column=0, sticky="ew", pady=(12, 0))
 
         suggestion_text = ttk.Label(
             suggestion,
@@ -133,6 +139,44 @@ class CoachApp(tk.Tk):
             foreground="#555555",
         )
         reason_text.pack(anchor=tk.W, fill=tk.X, pady=(8, 0))
+
+        memory = ttk.LabelFrame(side, text="Game Memory", padding=12)
+        memory.grid(row=2, column=0, sticky="nsew", pady=(12, 0))
+        side.rowconfigure(2, weight=1)
+
+        entry_row = ttk.Frame(memory)
+        entry_row.pack(fill=tk.X)
+        ttk.Entry(entry_row, textvariable=self.player_var, width=14).pack(side=tk.LEFT)
+        ttk.Combobox(
+            entry_row,
+            textvariable=self.event_type_var,
+            values=["seen", "suspicious", "cleared", "dead", "claim", "meeting"],
+            width=11,
+            state="readonly",
+        ).pack(side=tk.LEFT, padx=(6, 0))
+        ttk.Entry(entry_row, textvariable=self.event_detail_var).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(6, 0))
+
+        button_row = ttk.Frame(memory)
+        button_row.pack(fill=tk.X, pady=(8, 0))
+        ttk.Button(button_row, text="Add", command=self.add_memory_event).pack(side=tk.LEFT)
+        ttk.Button(button_row, text="+Susp", command=lambda: self.quick_event("suspicious")).pack(side=tk.LEFT, padx=(6, 0))
+        ttk.Button(button_row, text="Clear", command=lambda: self.quick_event("cleared")).pack(side=tk.LEFT, padx=(6, 0))
+        ttk.Button(button_row, text="Dead", command=lambda: self.quick_event("dead")).pack(side=tk.LEFT, padx=(6, 0))
+        ttk.Button(button_row, text="Reset", command=self.reset_memory).pack(side=tk.RIGHT)
+
+        ttk.Label(memory, textvariable=self.memory_suggestion_var, wraplength=390, font=("Segoe UI", 10, "bold")).pack(anchor=tk.W, fill=tk.X, pady=(10, 0))
+        ttk.Label(memory, textvariable=self.memory_reason_var, wraplength=390, foreground="#555555").pack(anchor=tk.W, fill=tk.X, pady=(3, 0))
+
+        lists = ttk.Frame(memory)
+        lists.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
+        lists.columnconfigure(0, weight=1)
+        lists.columnconfigure(1, weight=1)
+        lists.rowconfigure(0, weight=1)
+
+        self.players_list = tk.Listbox(lists, height=7, exportselection=False)
+        self.players_list.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
+        self.timeline_list = tk.Listbox(lists, height=7, exportselection=False)
+        self.timeline_list.grid(row=0, column=1, sticky="nsew")
 
         controls = ttk.Frame(root)
         controls.pack(fill=tk.X, pady=(14, 0))
@@ -219,6 +263,40 @@ class CoachApp(tk.Tk):
 
         self.screenshot_var.set(str(result.path))
         self.notes_var.set(f"Saved labeled sample as {state.value}.")
+
+    def add_memory_event(self) -> None:
+        self.memory.add_event(
+            event_type=self.event_type_var.get(),
+            player=self.player_var.get(),
+            detail=self.event_detail_var.get(),
+        )
+        self.event_detail_var.set("")
+        self.refresh_memory()
+
+    def quick_event(self, event_type: str) -> None:
+        self.event_type_var.set(event_type)
+        self.add_memory_event()
+
+    def reset_memory(self) -> None:
+        self.memory.reset()
+        self.refresh_memory()
+
+    def refresh_memory(self) -> None:
+        self.players_list.delete(0, tk.END)
+        for player in self.memory.ranked_players():
+            self.players_list.insert(tk.END, player.status())
+
+        self.timeline_list.delete(0, tk.END)
+        for event in self.memory.events[-30:]:
+            self.timeline_list.insert(tk.END, event.display())
+        if self.memory.events:
+            self.timeline_list.see(tk.END)
+
+        suggestion, reason = self.memory.suggestion()
+        self.memory_suggestion_var.set(suggestion)
+        self.memory_reason_var.set(reason)
+        self.suggestion_var.set(suggestion)
+        self.reason_var.set(f"Reason: {reason}")
 
     def start_preview(self) -> None:
         if self.preview_thread and self.preview_thread.is_alive():

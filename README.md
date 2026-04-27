@@ -50,4 +50,12 @@ python scripts/analyze_samples.py
 
 Phase 1 is just beginning. The app can start, show a live game-window preview, capture debug screenshots with a manual button, log observations, and return a placeholder state/suggestion. Realtime capture now uses `mss` in memory; the debug button saves a PNG only when clicked. The app also has a continuous preview loop for testing capture speed without writing frames to disk. The next step is to add real UI state detection.
 
+The right-side Game Memory panel is immediately usable while playing:
+
+- Put a player name in the first box.
+- Choose an event like `seen`, `suspicious`, `cleared`, `dead`, or `claim`.
+- Put location/claim details in the detail box.
+- Click `Add`, `+Susp`, `Clear`, or `Dead`.
+- The app keeps a timeline, suspicion ranking, and a conservative meeting suggestion.
+
 For state detection work, run preview during a private test session, choose a label from the dropdown, and click `Save Sample`. Samples are stored under `captures/samples/<state>/` and indexed in `captures/samples/samples.jsonl`. Once samples exist, run `python scripts/analyze_samples.py` to compare basic visual features by state.

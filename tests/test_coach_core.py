@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 from ggd_coach.logger import JsonlLogger
+from ggd_coach.game_memory import GameMemory
 from ggd_coach.models import CaptureResult, Frame, GameState, Observation
 from ggd_coach.samples import SampleStore
 from ggd_coach.state_detector import FrameAnalyzer, StateDetector
@@ -130,3 +131,16 @@ def test_sample_store_writes_state_index(tmp_path: Path) -> None:
     assert result.path.parent.name == "meeting"
     index = (tmp_path / "samples" / "samples.jsonl").read_text(encoding="utf-8")
     assert '"state": "meeting"' in index
+
+
+def test_game_memory_ranks_suspicious_players_and_suggests_questioning() -> None:
+    memory = GameMemory()
+    memory.add_event("seen", "Alice", "kitchen")
+    memory.add_event("suspicious", "Bob", "near body")
+    memory.add_event("suspicious", "Bob", "changed route claim")
+
+    suggestion, reason = memory.suggestion()
+
+    assert "Bob" in suggestion
+    assert "Bob" in reason
+    assert memory.ranked_players()[0].name == "Bob"

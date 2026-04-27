@@ -36,6 +36,36 @@ class Frame:
 
 
 @dataclass(frozen=True)
+class FrameFeatures:
+    sampled_pixels: int
+    mean_brightness: float
+    dark_ratio: float
+    bright_ratio: float
+    red_ratio: float
+    green_ratio: float
+    blue_ratio: float
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "sampled_pixels": self.sampled_pixels,
+            "mean_brightness": round(self.mean_brightness, 4),
+            "dark_ratio": round(self.dark_ratio, 4),
+            "bright_ratio": round(self.bright_ratio, 4),
+            "red_ratio": round(self.red_ratio, 4),
+            "green_ratio": round(self.green_ratio, 4),
+            "blue_ratio": round(self.blue_ratio, 4),
+        }
+
+
+@dataclass(frozen=True)
+class DetectionResult:
+    state: GameState
+    confidence: float
+    notes: str
+    features: FrameFeatures | None = None
+
+
+@dataclass(frozen=True)
 class Observation:
     observed_at: datetime
     state: GameState

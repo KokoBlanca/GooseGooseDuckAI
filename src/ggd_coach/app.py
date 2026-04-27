@@ -25,6 +25,9 @@ ROOT = Path(__file__).resolve().parents[2]
 class PreviewUpdate:
     frame: Frame
     fps: float
+    detection_state: GameState | None = None
+    detection_confidence: float | None = None
+    detection_notes: str | None = None
 
 
 class CoachApp(tk.Tk):
@@ -44,6 +47,7 @@ class CoachApp(tk.Tk):
         self.preview_stop = threading.Event()
         self.preview_thread: threading.Thread | None = None
         self.preview_target_fps = float(os.environ.get("GGD_PREVIEW_FPS", "15"))
+        self.preview_detect_interval = float(os.environ.get("GGD_DETECT_INTERVAL", "1.0"))
         self.latest_frame: Frame | None = None
 
         self.state_var = tk.StringVar(value="unknown")
@@ -145,13 +149,13 @@ class CoachApp(tk.Tk):
             messagebox.showerror("Capture failed", str(exc))
             return
 
-        state, confidence, notes = self.detector.detect(capture)
+        detection = self.detector.detect(capture)
         observation = Observation(
             observed_at=datetime.now().astimezone(),
-            state=state,
-            confidence=confidence,
+            state=detection.state,
+            confidence=detection.confidence,
             screenshot_path=str(capture.path),
-            notes=notes,
+            notes=detection.notes,
         )
         suggestion = self.suggestions.suggest(observation)
         self.logger.write_observation(observation, suggestion)
@@ -209,6 +213,7 @@ class CoachApp(tk.Tk):
     def _preview_loop(self) -> None:
         min_interval = 1.0 / max(self.preview_target_fps, 1.0)
         last_frame_at: float | None = None
+        last_detection_at = 0.0
         while not self.preview_stop.is_set():
             frame_started = time.perf_counter()
             try:
@@ -216,7 +221,20 @@ class CoachApp(tk.Tk):
                 now = time.perf_counter()
                 fps = 0.0 if last_frame_at is None else 1.0 / max(now - last_frame_at, 0.0001)
                 last_frame_at = now
-                self._replace_preview_update(PreviewUpdate(frame=frame, fps=fps))
+                detection = None
+                if now - last_detection_at >= self.preview_detect_interval:
+                    detection = self.detector.detect_frame(frame)
+                    last_detection_at = now
+
+                self._replace_preview_update(
+                    PreviewUpdate(
+                        frame=frame,
+                        fps=fps,
+                        detection_state=detection.state if detection else None,
+                        detection_confidence=detection.confidence if detection else None,
+                        detection_notes=detection.notes if detection else None,
+                    )
+                )
             except Exception as exc:  # pragma: no cover - defensive UI boundary
                 self._replace_preview_update(exc)
                 self.preview_stop.set()
@@ -258,6 +276,20 @@ class CoachApp(tk.Tk):
             self.preview_var.set(f"{update.fps:.1f} FPS | {frame.width}x{frame.height}")
             self.source_var.set(frame.source)
             self.screenshot_var.set("Preview uses memory frames only")
+            if update.detection_state is not None:
+                self.state_var.set(update.detection_state.value)
+                self.confidence_var.set(f"{update.detection_confidence:.2f}")
+                self.notes_var.set(update.detection_notes or "")
+                observation = Observation(
+                    observed_at=datetime.now().astimezone(),
+                    state=update.detection_state,
+                    confidence=update.detection_confidence or 0.0,
+                    screenshot_path=None,
+                    notes=update.detection_notes or "",
+                )
+                suggestion = self.suggestions.suggest(observation)
+                self.suggestion_var.set(suggestion.message)
+                self.reason_var.set(f"Reason: {suggestion.reason}")
 
         if self.preview_stop.is_set():
             if self.preview_thread and self.preview_thread.is_alive():

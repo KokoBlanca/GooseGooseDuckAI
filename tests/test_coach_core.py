@@ -5,9 +5,9 @@ from datetime import datetime
 from pathlib import Path
 
 from ggd_coach.logger import JsonlLogger
-from ggd_coach.models import CaptureResult, GameState, Observation
+from ggd_coach.models import CaptureResult, Frame, GameState, Observation
 from ggd_coach.samples import SampleStore
-from ggd_coach.state_detector import StateDetector
+from ggd_coach.state_detector import FrameAnalyzer, StateDetector
 from ggd_coach.suggestions import SuggestionEngine
 
 
@@ -20,11 +20,52 @@ def test_state_detector_returns_unknown_for_first_placeholder_capture(tmp_path: 
         source="test",
     )
 
-    state, confidence, notes = StateDetector().detect(capture)
+    detection = StateDetector().detect(capture)
 
-    assert state == GameState.UNKNOWN
-    assert confidence == 0.2
-    assert "not implemented" in notes
+    assert detection.state == GameState.UNKNOWN
+    assert detection.confidence == 0.2
+    assert "frame features" in detection.notes
+
+
+def test_frame_analyzer_extracts_basic_color_features() -> None:
+    frame = Frame(
+        width=2,
+        height=1,
+        created_at=datetime.now().astimezone(),
+        data=bytes(
+            [
+                0,
+                0,
+                255,
+                255,
+                0,
+                0,
+                0,
+                255,
+            ]
+        ),
+    )
+
+    features = FrameAnalyzer().analyze(frame)
+
+    assert features.sampled_pixels == 2
+    assert features.red_ratio == 0.5
+    assert features.dark_ratio == 0.5
+
+
+def test_state_detector_analyzes_frame_conservatively() -> None:
+    frame = Frame(
+        width=1,
+        height=1,
+        created_at=datetime.now().astimezone(),
+        data=bytes([255, 255, 255, 255]),
+    )
+
+    detection = StateDetector().detect_frame(frame)
+
+    assert detection.state == GameState.UNKNOWN
+    assert detection.features is not None
+    assert detection.features.bright_ratio == 1.0
 
 
 def test_suggestion_engine_pauses_on_unknown_state() -> None:
@@ -73,8 +114,6 @@ def test_sample_store_writes_state_index(tmp_path: Path) -> None:
                 created_at=frame.created_at,
                 source=frame.source,
             )
-
-    from ggd_coach.models import Frame
 
     frame = Frame(
         width=2,

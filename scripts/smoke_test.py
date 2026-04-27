@@ -27,17 +27,17 @@ def main() -> None:
             created_at=datetime.now().astimezone(),
             source="test",
         )
-        state, confidence, notes = StateDetector().detect(capture)
-        assert state == GameState.UNKNOWN
-        assert confidence == 0.2
-        assert "not implemented" in notes
+        detection = StateDetector().detect(capture)
+        assert detection.state == GameState.UNKNOWN
+        assert detection.confidence == 0.2
+        assert "frame features" in detection.notes
 
         observation = Observation(
             observed_at=datetime.now().astimezone(),
-            state=state,
-            confidence=confidence,
+            state=detection.state,
+            confidence=detection.confidence,
             screenshot_path=str(capture.path),
-            notes=notes,
+            notes=detection.notes,
         )
         suggestion = SuggestionEngine().suggest(observation)
         assert suggestion.action == "pause"

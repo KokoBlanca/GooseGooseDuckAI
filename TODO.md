@@ -14,6 +14,7 @@
 - [x] Replace slow debug-only screenshots with a faster in-memory capture path.
 - [x] Capture the Goose Goose Duck window instead of the full desktop when a matching window title is available.
 - [x] Add a continuous in-memory preview loop with FPS display.
+- [x] Show the live captured game frame in the desktop app.
 - [x] Add labeled frame sample collection for state detection work.
 - [x] Add basic frame feature extraction and sample analysis.
 - [ ] Detect high-level game states: lobby, free movement, meeting, voting, death/ghost, unknown.

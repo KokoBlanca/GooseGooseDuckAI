@@ -34,8 +34,8 @@ class CoachApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title("GGD AI Coach")
-        self.geometry("760x460")
-        self.minsize(640, 380)
+        self.geometry("1180x760")
+        self.minsize(980, 640)
 
         window_title = os.environ.get("GGD_WINDOW_TITLE", "Goose Goose Duck")
         self.capture = ScreenCapture(ROOT / "captures", window_title=window_title)
@@ -46,9 +46,11 @@ class CoachApp(tk.Tk):
         self.preview_queue: queue.Queue[PreviewUpdate | Exception] = queue.Queue()
         self.preview_stop = threading.Event()
         self.preview_thread: threading.Thread | None = None
-        self.preview_target_fps = float(os.environ.get("GGD_PREVIEW_FPS", "15"))
+        self.preview_target_fps = float(os.environ.get("GGD_PREVIEW_FPS", "12"))
         self.preview_detect_interval = float(os.environ.get("GGD_DETECT_INTERVAL", "1.0"))
+        self.autostart_preview = os.environ.get("GGD_AUTOSTART", "1") != "0"
         self.latest_frame: Frame | None = None
+        self.preview_photo = None
 
         self.state_var = tk.StringVar(value="unknown")
         self.confidence_var = tk.StringVar(value="0.00")
@@ -61,6 +63,8 @@ class CoachApp(tk.Tk):
         self.reason_var = tk.StringVar(value="")
 
         self._build_ui()
+        if self.autostart_preview:
+            self.after(300, self.start_preview)
 
     def _build_ui(self) -> None:
         root = ttk.Frame(self, padding=16)
@@ -76,8 +80,32 @@ class CoachApp(tk.Tk):
         )
         subtitle.pack(anchor=tk.W, pady=(2, 16))
 
-        status = ttk.LabelFrame(root, text="Current Observation", padding=12)
-        status.pack(fill=tk.X)
+        main = ttk.Frame(root)
+        main.pack(fill=tk.BOTH, expand=True)
+        main.columnconfigure(0, weight=3)
+        main.columnconfigure(1, weight=2)
+        main.rowconfigure(0, weight=1)
+
+        preview_panel = ttk.LabelFrame(main, text="Live Preview", padding=10)
+        preview_panel.grid(row=0, column=0, sticky="nsew", padx=(0, 12))
+        preview_panel.columnconfigure(0, weight=1)
+        preview_panel.rowconfigure(0, weight=1)
+
+        self.preview_image = ttk.Label(
+            preview_panel,
+            text="Starting preview...",
+            anchor=tk.CENTER,
+            background="#111111",
+            foreground="#dddddd",
+        )
+        self.preview_image.grid(row=0, column=0, sticky="nsew")
+
+        side = ttk.Frame(main)
+        side.grid(row=0, column=1, sticky="nsew")
+        side.columnconfigure(0, weight=1)
+
+        status = ttk.LabelFrame(side, text="Current Observation", padding=12)
+        status.grid(row=0, column=0, sticky="ew")
 
         self._add_row(status, "State", self.state_var)
         self._add_row(status, "Confidence", self.confidence_var)
@@ -86,13 +114,14 @@ class CoachApp(tk.Tk):
         self._add_row(status, "Screenshot", self.screenshot_var)
         self._add_row(status, "Notes", self.notes_var)
 
-        suggestion = ttk.LabelFrame(root, text="Suggestion", padding=12)
-        suggestion.pack(fill=tk.BOTH, expand=True, pady=(12, 0))
+        suggestion = ttk.LabelFrame(side, text="Suggestion", padding=12)
+        suggestion.grid(row=1, column=0, sticky="nsew", pady=(12, 0))
+        side.rowconfigure(1, weight=1)
 
         suggestion_text = ttk.Label(
             suggestion,
             textvariable=self.suggestion_var,
-            wraplength=690,
+            wraplength=390,
             font=("Segoe UI", 11),
         )
         suggestion_text.pack(anchor=tk.W, fill=tk.X)
@@ -100,7 +129,7 @@ class CoachApp(tk.Tk):
         reason_text = ttk.Label(
             suggestion,
             textvariable=self.reason_var,
-            wraplength=690,
+            wraplength=390,
             foreground="#555555",
         )
         reason_text.pack(anchor=tk.W, fill=tk.X, pady=(8, 0))
@@ -276,6 +305,7 @@ class CoachApp(tk.Tk):
             self.preview_var.set(f"{update.fps:.1f} FPS | {frame.width}x{frame.height}")
             self.source_var.set(frame.source)
             self.screenshot_var.set("Preview uses memory frames only")
+            self._render_preview_frame(frame)
             if update.detection_state is not None:
                 self.state_var.set(update.detection_state.value)
                 self.confidence_var.set(f"{update.detection_confidence:.2f}")
@@ -308,6 +338,20 @@ class CoachApp(tk.Tk):
     def destroy(self) -> None:
         self.preview_stop.set()
         super().destroy()
+
+    def _render_preview_frame(self, frame: Frame) -> None:
+        try:
+            from PIL import Image, ImageTk
+        except ImportError:
+            self.preview_image.configure(text="Pillow is required for live preview image.")
+            return
+
+        width = max(self.preview_image.winfo_width(), 320)
+        height = max(self.preview_image.winfo_height(), 240)
+        image = Image.frombytes("RGBA", (frame.width, frame.height), frame.data, "raw", "BGRA")
+        image.thumbnail((width, height), Image.Resampling.BILINEAR)
+        self.preview_photo = ImageTk.PhotoImage(image)
+        self.preview_image.configure(image=self.preview_photo, text="")
 
 
 def main() -> None:

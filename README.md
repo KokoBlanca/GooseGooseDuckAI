@@ -23,7 +23,8 @@ By default the app tries to capture a window whose title contains `Goose Goose D
 
 ```powershell
 $env:GGD_WINDOW_TITLE = "Goose Goose Duck"
-$env:GGD_PREVIEW_FPS = "15"
+$env:GGD_PREVIEW_FPS = "12"
+$env:GGD_AUTOSTART = "1"
 python run_coach.py
 ```
 
@@ -47,6 +48,6 @@ python scripts/analyze_samples.py
 
 ## Current Status
 
-Phase 1 is just beginning. The app can start, capture the desktop with a manual button, log observations, and return a placeholder state/suggestion. Realtime capture now uses `mss` in memory; the debug button saves a PNG only when clicked. The app also has a continuous preview loop for testing capture speed without writing frames to disk. The next step is to add real UI state detection.
+Phase 1 is just beginning. The app can start, show a live game-window preview, capture debug screenshots with a manual button, log observations, and return a placeholder state/suggestion. Realtime capture now uses `mss` in memory; the debug button saves a PNG only when clicked. The app also has a continuous preview loop for testing capture speed without writing frames to disk. The next step is to add real UI state detection.
 
 For state detection work, run preview during a private test session, choose a label from the dropdown, and click `Save Sample`. Samples are stored under `captures/samples/<state>/` and indexed in `captures/samples/samples.jsonl`. Once samples exist, run `python scripts/analyze_samples.py` to compare basic visual features by state.

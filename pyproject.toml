@@ -1,0 +1,23 @@
+[project]
+name = "goose-goose-duck-ai-coach"
+version = "0.1.0"
+description = "Private-room Goose Goose Duck AI coach prototype."
+requires-python = ">=3.11"
+dependencies = [
+    "mss>=10.2.0",
+    "pillow>=10.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.0.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
